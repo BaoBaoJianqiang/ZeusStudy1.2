@@ -1,5 +1,6 @@
 package jianqiang.com.hostapp.ams_hook;
 
+import android.app.Instrumentation;
 import android.os.Handler;
 
 import com.example.jianqiang.mypluginlibrary.RefInvoke;
@@ -44,25 +45,20 @@ public class AMSHookHelper {
                 new MockClass1(mInstance));
 
         //把gDefault的mInstance字段，修改为proxy
-        Class class1 = gDefault.getClass();
         RefInvoke.setFieldObject("android.util.Singleton", gDefault, "mInstance", proxy);
     }
 
-    /**
-     * 由于之前我们用替身欺骗了AMS; 现在我们要换回我们真正需要启动的Activity
-     * 不然就真的启动替身了, 狸猫换太子...
-     * 到最终要启动Activity的时候,会交给ActivityThread 的一个内部类叫做 H 来完成
-     * H 会完成这个消息转发; 最终调用它的callback
-     */
-    public static void hookActivityThread() throws Exception {
-
+    public static void attachContext() throws Exception{
         // 先获取到当前的ActivityThread对象
-        Object currentActivityThread = RefInvoke.getStaticFieldObject("android.app.ActivityThread", "sCurrentActivityThread");
+        Object currentActivityThread = RefInvoke.invokeStaticMethod("android.app.ActivityThread", "currentActivityThread");
 
-        // 由于ActivityThread一个进程只有一个,我们获取这个对象的mH
-        Handler mH = (Handler) RefInvoke.getFieldObject(currentActivityThread, "mH");
+        // 拿到原始的 mInstrumentation字段
+        Instrumentation mInstrumentation = (Instrumentation) RefInvoke.getFieldObject(currentActivityThread, "mInstrumentation");
 
-        //把Handler的mCallback字段，替换为new MockClass2(mH)
-        RefInvoke.setFieldObject(Handler.class, mH, "mCallback", new MockClass2(mH));
+        // 创建代理对象
+        Instrumentation evilInstrumentation = new EvilInstrumentation(mInstrumentation);
+
+        // 偷梁换柱
+        RefInvoke.setFieldObject(currentActivityThread, "mInstrumentation", evilInstrumentation);
     }
 }
